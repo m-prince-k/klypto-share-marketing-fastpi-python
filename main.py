@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import pandas as pd
 import traceback
+import re
 
 app = FastAPI(title="Klypto Strategy Evaluator API")
 
@@ -55,6 +56,30 @@ def evaluate_strategy(payload: StrategyPayload):
         # 3. Dynamic Execution of Custom Strategy Code
         # ---------------------------------------------------------
         if payload.strategy_code:
+            # --- SECURITY CHECK ---
+            # Define forbidden patterns to prevent malicious code execution
+            forbidden_patterns = [
+                r"import\s+(os|sys|subprocess|shlex|socket|urllib|requests)",
+                r"from\s+(os|sys|subprocess|shlex|socket|urllib|requests)\s+import",
+                r"__import__",
+                r"open\s*\(",
+                r"eval\s*\(",
+                r"exec\s*\(",
+                r"globals\s*\(",
+                r"locals\s*\(",
+                r"os\.",
+                r"sys\.",
+                r"subprocess\."
+            ]
+            
+            for pattern in forbidden_patterns:
+                if re.search(pattern, payload.strategy_code):
+                    raise HTTPException(
+                        status_code=400, 
+                        detail="Security Error: Unsafe code detected! System calls, file operations, and sensitive imports are not allowed."
+                    )
+            # ----------------------
+
             # Create a safe local scope for the exec function
             local_scope = {'df': df, 'pd': pd}
             try:
