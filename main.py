@@ -53,6 +53,16 @@ def evaluate_strategy(payload: StrategyPayload):
         df['volume'] = df['volume'].astype(int)
 
         # ---------------------------------------------------------
+        # --- Validate strategy_code content ---
+        if payload.strategy_code:
+            valid_keywords = ['plot_markers', 'markers.append', 'df[', 'df.loc', 'signal', 'plotshape', 'plot(']
+            has_valid_code = any(kw in payload.strategy_code for kw in valid_keywords)
+            if not has_valid_code or len(payload.strategy_code.strip()) < 20:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f'Invalid strategy_code. Your code must contain valid strategy logic (e.g., use plot_markers, df[], signal etc.). Received: "{payload.strategy_code[:50]}"'
+                )
+
         # 3. Dynamic Execution of Custom Strategy Code
         # ---------------------------------------------------------
         if payload.strategy_code:
@@ -140,7 +150,9 @@ def evaluate_strategy(payload: StrategyPayload):
             
             try:
                 # The custom code should modify the 'df' directly
-                exec(payload.strategy_code, {}, local_scope)
+                # Pass local_scope as BOTH globals and locals so that
+                # plot_markers, np, pd etc. are all accessible inside exec
+                exec(payload.strategy_code, local_scope, local_scope)
                 df = local_scope['df']
             except Exception as e:
                 # Catch syntax or runtime errors in the user's python code
